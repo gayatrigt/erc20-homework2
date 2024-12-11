@@ -1,66 +1,44 @@
-## Foundry
+## Vulnerability 1: Freeze Bypass
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+### The Problem
 
-Foundry consists of:
+The freezing mechanism can be bypassed due to incomplete checks in the `transferFrom` function.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- Only checks if the spender (`msg.sender`) is frozen
+- Doesn't check if the token owner (`from`) is frozen
+- A frozen account's tokens can still be moved if they previously approved a non-frozen address
 
-## Documentation
+### The Fix
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```solidity
+function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+    require(!isFrozen[msg.sender] && !isFrozen[from], "account frozen");
+    return super.transferFrom(from, to, amount);
+}
 ```
 
-### Test
+## Vulnerability 2: Unauthorized Burning
 
-```shell
-$ forge test
+### The Problem
+
+The `burn` function has no access controls, allowing anyone to burn anyone else's tokens.
+
+- No permission checks
+- Anyone can burn tokens from any address
+- Catastrophic loss of funds possible
+
+### The Fix
+
+```solidity
+function burn(address from, uint256 amount) public {
+    require(msg.sender == from || msg.sender == owner(), "not authorized");
+    _burn(from, amount);
+}
 ```
 
-### Format
+Best Practices Learned
 
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+1. **Access Control**: Always implement proper access controls on sensitive functions
+2. **Complete Checks**: When implementing freezing or blocking mechanisms, ensure all relevant parties are checked
+3. **Token Safety**: For functions that can destroy tokens, ensure only authorized parties can execute them
+4. **Permission Validation**: Double-check both spender and owner permissions in transfer-related functions
